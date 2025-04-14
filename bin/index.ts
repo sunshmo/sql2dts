@@ -1,14 +1,20 @@
 #!/usr/bin/env node
-
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'path';
 import * as process from 'node:process';
 
 const args = process.argv.slice(2);
 
-if (!args[0]) {
-  console.error('❌ No input SQL file specified.');
-  process.exit(1);
+if (!args[0] || args.includes('--help') || args.includes('-h')) {
+  console.log(`
+Usage: sql2dts <input.sql> [-d dbname] [-o output.d.ts]
+
+Options:
+  -d <dbname>     Specify database type (default: mysql)
+  -o <output>     Output path for .d.ts file
+  -h, --help      Show this help message
+`);
+  process.exit(0);
 }
 
 const dbName = (args.includes('-d') ? args[args.indexOf('-d') + 1] : 'mysql').toLowerCase();
@@ -23,23 +29,34 @@ if (!existsSync(input)) {
   process.exit(1);
 }
 
-try {
-  const { generate: generateDts } = require(`../src/${dbName}`);
+const isDev = __dirname.includes('src');
 
+let generateDts: (sql: string) => string;
+
+try {
+  const modulePath = isDev
+    ? join(__dirname, `../src/${dbName}`)
+    : join(__dirname, `../dist/${dbName}.js`);
+  ({ generate: generateDts } = require(modulePath));
+} catch (e) {
+  console.error(`❌ Failed to load database module for: ${dbName}`);
+  console.error(e);
+  process.exit(1);
+}
+
+try {
   const sql = readFileSync(input, 'utf-8');
   const dts = generateDts(sql);
 
-  if (dts) {
+  if (typeof dts === 'string' && dts.trim()) {
     try {
       writeFileSync(output, dts);
-    } catch (err) {
+      console.log(`✅ Generated .d.ts saved to: ${output}`);
+    } catch (err: any) {
       if (err.code === 'ENOENT') {
         const dir = dirname(output);
-
         console.log(`⚠️ Directory not found, creating: ${dir}`);
         mkdirSync(dir, { recursive: true });
-
-        // Try writing again
         writeFileSync(output, dts);
         console.log(`✅ Generated .d.ts saved to: ${output}`);
       } else {
@@ -47,10 +64,10 @@ try {
       }
     }
   } else {
-    console.log('❗ No table found in SQL input.');
+    console.log('❗ No TypeScript definitions generated from SQL.');
   }
-
 } catch (e) {
-  console.error(`❌ Unsupported database type or module not found: ${dbName}`);
+  console.error('❌ Error while processing SQL input.');
+  console.error(e);
   process.exit(1);
 }

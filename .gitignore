@@ -20,6 +20,7 @@
 # production
 /build
 /dist
+/dist-bin
 
 
 /public/uploads
