@@ -3,6 +3,12 @@
   "version": "0.0.3",
   "description": "A command-line tool that converts SQL files into TypeScript type definition (.d.ts) files that support multiple database types. Can also be used in the browser.",
   "main": "dist/index.js",
+  "module": "./dist/index.mjs",
+  "unpkg": "./dist/index.global.js",
+  "jsdelivr": "./dist/index.global.js",
+  "browser": "./dist/index.global.js",
+  "types": "./dist/index.d.ts",
+  "typings": "./dist/index.d.ts",
   "bin": {
     "sql2dts": "./dist-bin/index.js"
   },
@@ -14,7 +20,10 @@
     "build": "run-s format generate-export tsup",
     "format-view": "biome check src",
     "format": "biome format --write src",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "release-patch": "npm version patch && npm publish && git push --follow-tags",
+    "release-minor": "npm version minor && npm publish && git push --follow-tags",
+    "release-major": "npm version major && npm publish && git push --follow-tags"
   },
   "keywords": [
     "sql2dts",

@@ -125,7 +125,7 @@ namespace DbName {
 Need to introduce static resources
 
 ```html
-<script src="https://unpkg.com/sql2dts@lastest"></script>
+<script src="https://unpkg.com/sql2dts"></script>
 ```
 
 How to use it in browser.
