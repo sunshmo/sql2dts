@@ -1,6 +1,6 @@
 {
   "name": "sql2dts",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A command-line tool that converts SQL files into TypeScript type definition (.d.ts) files that support multiple database types. Can also be used in the browser.",
   "main": "dist/index.js",
   "bin": {
