@@ -16,7 +16,6 @@ try {
       const capitalized = fileName.length > 0
         ? fileName[0].toUpperCase() + fileName.slice(1)
         : fileName;
-      console.log(fileName);
       return `export { generate as generateFor${capitalized} } from './${fileName}';`;
     });
 

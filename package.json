@@ -12,7 +12,8 @@
     "dev": "ts-node bin/index.ts test/mysql.sql -d mysql",
     "build": "run-s format generate-export tsup",
     "format-view": "biome check src",
-    "format": "biome format --write src"
+    "format": "biome format --write src",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "sql2dts",
