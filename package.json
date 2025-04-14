@@ -35,6 +35,14 @@
   ],
   "author": "sunshmo",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sunshmo/sql2dts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sunshmo/sql2dts/issues"
+  },
+  "homepage": "https://github.com/sunshmo/sql2dts#readme",
   "packageManager": "pnpm@10.7.0",
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
