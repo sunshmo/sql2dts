@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join, dirname } from 'path';
+import { join, dirname, isAbsolute } from 'path';
 import * as process from 'node:process';
 
 const args = process.argv.slice(2);
@@ -18,11 +18,13 @@ Options:
 }
 
 const dbName = (args.includes('-d') ? args[args.indexOf('-d') + 1] : 'mysql').toLowerCase();
-const input = join(process.cwd(), args[0]);
-const output = join(
-  process.cwd(),
-  args.includes('-o') ? args[args.indexOf('-o') + 1] : `${dbName}.d.ts`
-);
+// absolute path
+const inputArg = args[0];
+const input = isAbsolute(inputArg) ? inputArg : join(process.cwd(), inputArg);
+
+// absolute path
+let outputArg = args.includes('-o') ? args[args.indexOf('-o') + 1] : `${dbName}.d.ts`;
+const output = isAbsolute(outputArg) ? outputArg : join(process.cwd(), outputArg);
 
 if (!existsSync(input)) {
   console.error('❌ SQL file not found:', input);

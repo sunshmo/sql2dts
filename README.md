@@ -83,6 +83,14 @@ sql2dts test/msyql.sql -o types/database.d.ts -d msyql
 Saves generated types to `types/database.d.ts`.
 
 
+4. Absolute path:
+
+```bash
+sql2dts test/msyql.sql -o /path/to/abc.ts -d mysql
+```
+
+Saves generated types to `/path/to/abc.ts`.
+
 
 ### esm
 
