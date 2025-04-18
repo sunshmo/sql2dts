@@ -19,11 +19,45 @@ function mapType(
 		return udtTypeMapping[type];
 	}
 
-	if (/tinyint|smallint|mediumint|int|bigint|integer/.test(type))
-		return 'number';
+	// 支持数组类型
+	if (/array<.*>/i.test(type)) {
+		const match = type.match(/^array<(.*)>/i);
+		if (match) {
+			const innerType = mapType(match[1]);
+			return `${innerType}[]`;
+		}
+	}
+
+	// 支持 Map 类型
+	if (/map<.*,.*/i.test(type)) {
+		const match = type.match(/^map<([^,]+),\s*(.*)>/i);
+		if (match) {
+			const keyType = mapType(match[1]);
+			const valueType = mapType(match[2]);
+			return `Record<${keyType}, ${valueType}>`;
+		}
+	}
+
+	// 支持 Struct 类型
+	if (/struct<.*>/i.test(type)) {
+		const match = type.match(/^struct<(.*)>/i);
+		if (match) {
+			const fields = match[1]
+				.split(',')
+				.map((field) => field.trim())
+				.map((field) => {
+					const [name, fieldType] = field.split(':').map((part) => part.trim());
+					return `${name}: ${mapType(fieldType)}`;
+				})
+				.join('; ');
+			return `{ ${fields} }`;
+		}
+	}
+
+	// 基本类型映射
+	if (/tinyint|smallint|mediumint|int|bigint|integer/.test(type)) return 'number';
 	if (/decimal|numeric|decfloat|real|double/.test(type)) return 'number';
-	if (/char|nchar|nvarchar|varchar|graphic|vargraphic|clob|dbclob/.test(type))
-		return 'string';
+	if (/char|nchar|nvarchar|varchar|graphic|vargraphic|clob|dbclob/.test(type)) return 'string';
 	if (/binary|varbinary|blob/.test(type)) return 'Buffer';
 	if (/date|time|timestamp/.test(type)) return 'string';
 	if (/boolean|bool/.test(type)) return 'boolean';
@@ -31,8 +65,7 @@ function mapType(
 	if (/xml/.test(type)) return 'string';
 	if (/json/.test(type)) return 'Record<string, any>';
 	if (/cursor/.test(type)) return 'any';
-	if (/st_point|st_linestring|st_polygon|st_geometry/.test(type))
-		return 'string'; // 空间类型
+	if (/st_point|st_linestring|st_polygon|st_geometry/.test(type)) return 'string'; // 空间类型
 
 	return 'any';
 }
@@ -92,7 +125,7 @@ interface ParsedTable {
 }
 
 function parseSQL(sql: string): ParsedTable[] {
-	// 排除 DECLARE GLOBAL TEMPORARY TABLE（临时表）、CREATE VIEW、CREATE PROCEDURE、CREATE SEQUENCE 等
+	// 排除临时表、视图、存储过程、序列等
 	if (!/create\s+table/i.test(sql)) return [];
 
 	// 支持 DB2 的 CREATE TABLE，忽略 schema，如 dbname.table → table

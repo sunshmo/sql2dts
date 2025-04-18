@@ -7,13 +7,12 @@ export function generate(sql: string): string {
 	});
 
 	const outputLines = tableBlocks.map((block) => {
-		// const rawName = block.name;
-		// const tableName = rawName.includes('.') ? rawName.split('.').pop()! : rawName;
 		const tableName = generateInterfaceName(block.name);
 
 		const fields = block.columns.map((col) => {
 			const tsType = convertToTypeScript(col.type, 'hive');
-			return `  /** ${col.comment || ''} */\n  ${col.name}: ${tsType};`;
+			const comment = col.comment ? `/** ${col.comment} */` : '';
+			return `  ${comment}\n  ${col.name}${col.nullable ? '?: ' : ': '}${tsType};`;
 		});
 
 		return `declare interface ${tableName} {\n${fields.join('\n')}\n}`;
@@ -25,11 +24,19 @@ export function generate(sql: string): string {
 function convertToTypeScript(type: string, dialect: string): string {
 	const baseType = type.toLowerCase().trim();
 
+	// Nullable support (nullable types)
+	if (baseType.startsWith('nullable<')) {
+		const innerType = baseType.match(/^nullable<(.*)>$/)?.[1]?.trim() || 'any';
+		return `${convertToTypeScript(innerType, dialect)} | null`;
+	}
+
+	// Array type
 	if (baseType.startsWith('array<')) {
 		const inner = baseType.match(/^array<(.*)>$/)?.[1]?.trim() || 'any';
 		return `${convertToTypeScript(inner, dialect)}[]`;
 	}
 
+	// Map type
 	if (baseType.startsWith('map<')) {
 		const match = baseType.match(/^map<([^,]+),\s*(.+)>$/);
 		if (match) {
@@ -40,6 +47,7 @@ function convertToTypeScript(type: string, dialect: string): string {
 		return 'Record<string, any>';
 	}
 
+	// Struct type
 	if (baseType.startsWith('struct<')) {
 		const structBody = baseType.slice(7, -1); // remove 'struct<' and trailing '>'
 		const fields = structBody.split(',').map((field) => {
@@ -49,6 +57,7 @@ function convertToTypeScript(type: string, dialect: string): string {
 		return `{ ${fields.join('; ')} }`;
 	}
 
+	// Basic types
 	switch (baseType.split('(')[0]) {
 		case 'tinyint':
 		case 'smallint':
@@ -78,6 +87,7 @@ interface ColumnDef {
 	name: string;
 	type: string;
 	comment?: string;
+	nullable?: boolean;
 }
 
 interface TableBlock {
@@ -128,11 +138,13 @@ function parseSQL(sql: string, options: ParseOptions): TableBlock[] {
 			const nameMatch = line.match(/^["`]?([\w]+)["`]?/);
 			const typeMatch = line.match(/^[\w"`]+\s+([^\s]+(?:<.*?>)?)/);
 			const commentMatch = line.match(/comment\s+'([^']+)'/i);
+			const nullableMatch = line.match(/\s+(nullable)/i);
 
 			return {
 				name: nameMatch?.[1] || '',
 				type: typeMatch?.[1] || 'any',
 				comment: commentMatch?.[1],
+				nullable: nullableMatch !== null,
 			};
 		});
 

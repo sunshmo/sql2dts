@@ -22,6 +22,7 @@ function parseSQLForSpanner(sql: string): Table[] {
 				/(\w+)\s+([^\s,]+)(?:\s+not\s+null)?(?:\s+options\s*\(\s*comment\s*=\s*'([^']*)'\s*\))?,?/gim,
 			),
 		];
+
 		for (const [, colName, rawType, comment] of columnMatches) {
 			columns.push({
 				name: colName,
@@ -54,18 +55,20 @@ function generateInterface(table: Table): string {
 function spannerTypeToTsType(type: string): string {
 	let t = type.toLowerCase().trim();
 
-	// ARRAY<T>
+	// 处理数组类型：ARRAY<T>
 	const arrayMatch = t.match(/^array<(.+)>$/i);
 	if (arrayMatch) {
 		return `${spannerTypeToTsType(arrayMatch[1])}[]`;
 	}
 
+	// 处理不同的Spanner类型映射
 	if (t === 'int64' || t === 'float64' || t === 'numeric') return 'number';
 	if (t === 'bool') return 'boolean';
 	if (t === 'string' || t === 'json') return 'string';
 	if (t === 'date' || t.startsWith('timestamp')) return 'string';
 	if (t === 'bytes') return 'Buffer';
 
+	// 默认返回 any
 	return 'any';
 }
 

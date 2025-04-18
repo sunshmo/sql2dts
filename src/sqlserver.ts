@@ -1,159 +1,121 @@
 import { generateInterfaceName } from './util/generate-interface-name';
 
-function mapType(rawType: string, enumValues?: string[]): string {
-	if (enumValues?.length) {
-		return enumValues.map((v) => `'${v}'`).join(' | ');
-	}
-
-	const type = rawType.toLowerCase();
-	if (
-		/tinyint|smallint|mediumint|int|bigint|decimal|numeric|money|smallmoney|float|double|real/.test(
-			type,
-		)
-	)
-		return 'number';
-	if (/char|nchar|nvarchar|ntext|varchar|text|longtext|enum|set/.test(type))
-		return 'string';
-	if (/date|datetime|timestamp|time|year|datetimeoffset/.test(type))
-		return 'string';
-	if (/uniqueidentifier/.test(type)) return 'string';
-	if (/rowversion/.test(type)) return 'Buffer';
-	if (/bit|bool|boolean/.test(type)) return 'boolean';
-	if (/image|xml|binary|varbinary|blob|longblob/.test(type)) return 'Buffer';
-	if (/json/.test(type)) return 'Record<string, any>';
-	return 'any';
+export function generate(sql: string): string {
+	const tables = parseSQLForSQLServer(sql);
+	return tables.map(generateInterface).join('\n\n');
 }
 
-export function generate(
-	sql: string,
-	options?: { namespace?: string },
-): string {
-	const tables = parseSQL(sql);
-	const lines: string[] = [];
+function parseSQLForSQLServer(sql: string): Table[] {
+	const tableDefs = [
+		...sql.matchAll(
+			/create\s+table\s+([\w.]+)\s*\(([\s\S]+?)\)\s*(?:;|--|\n)/gim,
+		),
+	];
 
-	if (options?.namespace) {
-		lines.push(`declare namespace ${options.namespace} {`);
-	}
+	const indexDefs = [
+		...sql.matchAll(
+			/create\s+index\s+([\w.]+)\s+on\s+([\w.]+)\s*\(([\w\s,]+)\)/gim,
+		),
+	];
 
-	for (const table of tables) {
-		const interfaceLine = `${options?.namespace ? '' : 'export '}interface ${generateInterfaceName(table.name)} {`;
-		lines.push(interfaceLine);
+	const tables: Table[] = [];
 
-		for (const column of table.columns) {
-			const tsType = mapType(column.rawType, column.enumValues);
-			const optional =
-				column.isNullable || column.defaultValue !== undefined ? '?' : '';
-			const comment = column.comment ? ` // ${column.comment}` : '';
-			lines.push(`  ${column.name}${optional}: ${tsType};${comment}`);
+	// 解析表结构
+	for (const match of tableDefs) {
+		const [, fullTableName, body] = match;
+		const name = fullTableName.replace(/["]/g, '');
+		const columns: Column[] = [];
+
+		const columnMatches = [
+			...body.matchAll(
+				/(\w+)\s+([^\s,]+)(?:\s+not\s+null)?(?:\s+options\s*\(\s*comment\s*=\s*'([^']*)'\s*\))?,?/gim,
+			),
+		];
+		for (const [, colName, rawType, comment] of columnMatches) {
+			columns.push({
+				name: colName,
+				type: sqlServerTypeToTsType(rawType),
+				comment: comment?.trim(),
+			});
 		}
 
-		lines.push('}');
-		lines.push('');
+		tables.push({
+			name,
+			columns,
+			indexes: parseIndexesForTable(name, indexDefs),  // 解析索引
+		});
 	}
 
-	if (options?.namespace) {
-		lines.push('}');
+	return tables;
+}
+
+// 解析索引
+function parseIndexesForTable(tableName: string, indexDefs: RegExpMatchArray[]): Index[] {
+	return indexDefs
+		.filter(([, , indexTableName]) => indexTableName === tableName) // 筛选属于当前表的索引
+		.map(([, indexName, , columns]) => {
+			const indexColumns = columns.split(',').map(col => col.trim());
+			return {
+				name: indexName,
+				columns: indexColumns,
+			};
+		});
+}
+
+function generateInterface(table: Table): string {
+	const interfaceName = generateInterfaceName(table.name);
+	const lines: string[] = [];
+
+	lines.push(`export interface ${interfaceName} {`);
+	for (const col of table.columns) {
+		const comment = col.comment ? ` // ${col.comment}` : '';
+		lines.push(`  ${col.name}: ${col.type};${comment}`);
+	}
+	lines.push(`}`);
+
+	// 处理索引
+	if (table.indexes.length > 0) {
+		lines.push('');
+		lines.push('export const indexes = {');
+		table.indexes.forEach(index => {
+			lines.push(`  ${index.name}: [${index.columns.map(col => `'${col}'`).join(', ')}],`);
+		});
+		lines.push('};');
 	}
 
 	return lines.join('\n');
 }
 
-interface ParsedColumn {
+function sqlServerTypeToTsType(type: string): string {
+	let t = type.toLowerCase().trim();
+
+	// SQL Server 常见类型
+	if (t === 'int' || t === 'bigint' || t === 'smallint' || t === 'tinyint') return 'number';
+	if (t === 'varchar' || t === 'char' || t === 'text' || t === 'nvarchar') return 'string';
+	if (t === 'bit') return 'boolean';
+	if (t === 'datetime' || t === 'smalldatetime' || t === 'timestamp') return 'string';
+	if (t === 'decimal' || t === 'numeric' || t === 'float' || t === 'real') return 'number';
+	if (t === 'uniqueidentifier') return 'string';
+	if (t === 'binary' || t === 'varbinary') return 'Buffer';
+	if (t === 'money' || t === 'smallmoney') return 'number';
+
+	// 默认返回 any
+	return 'any';
+}
+
+interface Column {
 	name: string;
-	rawType: string;
-	isNullable: boolean;
+	type: string;
 	comment?: string;
-	enumValues?: string[];
-	length?: number;
-	precision?: number;
-	scale?: number;
-	defaultValue?: string;
-	isPrimary?: boolean;
-	isUnique?: boolean;
-	isAutoIncrement?: boolean;
 }
 
-interface ParsedTable {
+interface Table {
 	name: string;
-	columns: ParsedColumn[];
+	columns: Column[];
+	indexes: Index[];
 }
 
-function parseSQL(sql: string): ParsedTable[] {
-	const tableBlocks = [
-		...sql.matchAll(
-			/create\s+table\s+(?:\[?(\w+)\]?\.)?\[?(\w+)\]?\s*\(([\s\S]+?)\)\s*(?:with|on|textimage_on|;)/gim,
-		),
-	];
-
-	const tables: ParsedTable[] = [];
-
-	for (const [, schema, tableName, rawColumns] of tableBlocks) {
-		const lines = rawColumns
-			.split(/,(?![^()]*\))/)
-			.map((line) => line.trim())
-			.filter(
-				(line) =>
-					!!line &&
-					!/^(primary\s+key|unique|key|constraint|foreign|period\s+for)/i.test(
-						line,
-					),
-			);
-
-		const columns: ParsedColumn[] = [];
-
-		for (const line of lines) {
-			const columnMatch = line.match(
-				/^\[?(\w+)\]?\s+([a-zA-Z0-9_]+(?:\s*\([^)]*\))?)([\s\S]*)$/,
-			);
-			if (!columnMatch) continue;
-
-			const [, name, rawTypeFull, rest] = columnMatch;
-			const rawType = rawTypeFull.trim();
-
-			const isNullable = !/not\s+null/i.test(rest);
-			const isPrimary = /primary\s+key/i.test(rest);
-			const isUnique = /unique/i.test(rest);
-			const isAutoIncrement = /identity\s*\(\d+,\s*\d+\)/i.test(rest);
-
-			const commentMatch = rest.match(/--\s*(.+)$|comment\s+['"]([^'"]+)['"]/i);
-			const comment = commentMatch
-				? commentMatch[1] || commentMatch[2]
-				: undefined;
-
-			const defaultMatch = rest.match(/default\s+(.+?)(?:\s|,|$)/i);
-			const defaultValue = defaultMatch
-				? defaultMatch[1].replace(/^['"]|['"]$/g, '')
-				: undefined;
-
-			const lengthMatch = rawType.match(/\w+\((\d+)\)/);
-			const length = lengthMatch ? parseInt(lengthMatch[1], 10) : undefined;
-
-			const precisionScaleMatch = rawType.match(/\w+\((\d+),\s*(\d+)\)/);
-			const precision = precisionScaleMatch
-				? parseInt(precisionScaleMatch[1], 10)
-				: undefined;
-			const scale = precisionScaleMatch
-				? parseInt(precisionScaleMatch[2], 10)
-				: undefined;
-
-			columns.push({
-				name,
-				rawType,
-				isNullable,
-				comment,
-				enumValues: undefined,
-				length,
-				precision,
-				scale,
-				defaultValue,
-				isPrimary,
-				isUnique,
-				isAutoIncrement,
-			});
-		}
-
-		tables.push({ name: tableName, columns });
-	}
-
-	return tables;
+interface Index {
+	name: string;
+	columns: string[];
 }

@@ -7,11 +7,11 @@ export function generate(sql: string): string {
 
 function parseSQLForCockroachDB(sql: string): Table[] {
 	const tableDefs = [
-		...sql.matchAll(/create\s+table\s+(`?[\w.]+`?)\s*\(([\s\S]+?)\)\s*\)?/gim),
+		...sql.matchAll(/create\s+table\s+(`?[\w.]+`?)\s*\(([\s\S]+?)\)\s*(index\s+.*|primary\s+key\s+.*)?/gim),
 	];
 
 	return tableDefs.map((match) => {
-		const [, fullTableName, body] = match;
+		const [, fullTableName, body, indexDef] = match;
 		const name = fullTableName.replace(/`/g, '');
 		const columns: Column[] = [];
 
@@ -29,9 +29,28 @@ function parseSQLForCockroachDB(sql: string): Table[] {
 			});
 		}
 
+		const indexes = parseIndexes(indexDef);
+
 		return {
 			name,
 			columns,
+			indexes,
+		};
+	});
+}
+
+function parseIndexes(indexDef: string | undefined): Index[] {
+	if (!indexDef) return [];
+
+	const indexMatches = [
+		...indexDef.matchAll(/create\s+index\s+(\w+)\s+on\s+`?[\w.]+`?\s*\(([^)]+)\)/gim),
+	];
+
+	return indexMatches.map((match) => {
+		const [, indexName, columns] = match;
+		return {
+			name: indexName,
+			columns: columns.split(',').map((col) => col.trim()),
 		};
 	});
 }
@@ -39,6 +58,14 @@ function parseSQLForCockroachDB(sql: string): Table[] {
 function generateInterface(table: Table): string {
 	const interfaceName = generateInterfaceName(table.name);
 	const lines: string[] = [];
+
+	if (table.indexes.length > 0) {
+		lines.push(`/**`);
+		table.indexes.forEach((index) => {
+			lines.push(` * Index: ${index.name} (${index.columns.join(', ')})`);
+		});
+		lines.push(` */`);
+	}
 
 	lines.push(`export interface ${interfaceName} {`);
 	for (const col of table.columns) {
@@ -93,4 +120,10 @@ interface Column {
 interface Table {
 	name: string;
 	columns: Column[];
+	indexes: Index[];
+}
+
+interface Index {
+	name: string;
+	columns: string[];
 }

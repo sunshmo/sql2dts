@@ -51,6 +51,7 @@ export function generate(
 
 	return lines.join('\n');
 }
+
 interface ParsedColumn {
 	name: string;
 	rawType: string;
@@ -86,7 +87,7 @@ function parseSQL(sql: string): ParsedTable[] {
 			.map((line) => line.trim())
 			.filter(
 				(line) =>
-					!!line && !/^(primary|unique|key|constraint|foreign)/i.test(line),
+					!!line && !/^(primary|unique|key|constraint|foreign|index)/i.test(line),
 			);
 
 		const columns: ParsedColumn[] = [];

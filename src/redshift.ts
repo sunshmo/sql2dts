@@ -44,6 +44,14 @@ function mapType(
 	// Redshift UUID 类型
 	if (/uuid/.test(type)) return 'string';
 
+	// Redshift 数组类型
+	if (/ARRAY/.test(type)) {
+		const arrayTypeMatch = type.match(/ARRAY\[(.+)\]/);
+		if (arrayTypeMatch) {
+			return `${mapType(arrayTypeMatch[1], undefined, udtTypeMapping)}[]`;
+		}
+	}
+
 	// 默认返回 any 类型
 	return 'any';
 }
@@ -52,6 +60,7 @@ function mapType(
 export function generate(
 	sql: string,
 	options?: { namespace?: string },
+	udtTypeMapping: Record<string, string> = {}
 ): string {
 	const tables = parseSQL(sql);
 	const lines: string[] = [];
@@ -65,7 +74,7 @@ export function generate(
 		lines.push(interfaceLine);
 
 		for (const column of table.columns) {
-			const tsType = mapType(column.rawType, column.enumValues);
+			const tsType = mapType(column.rawType, column.enumValues, udtTypeMapping);
 			const optional =
 				column.isNullable || column.defaultValue !== undefined ? '?' : '';
 			const comment = column.comment ? ` // ${column.comment}` : '';
@@ -119,8 +128,6 @@ function parseSQL(sql: string): ParsedTable[] {
 	const tables: ParsedTable[] = [];
 
 	for (const [, /* schema */ , tableName, rawColumns] of tableBlocks) {
-		// 处理标识符引号（"Table"）→ Table
-		// const tableName = tableNameRaw.replace(/(^"|"$)/g, '');
 		const lines = rawColumns
 			.split(/,(?![^()]*\))/) // 忽略括号内的逗号
 			.map((line) => line.trim())

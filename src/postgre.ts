@@ -7,15 +7,15 @@ function mapType(rawType: string, enumValues?: string[]): string {
 	}
 
 	const type = rawType.toLowerCase();
-	if (/serial|bigserial/.test(type)) return 'number';
-	if (/uuid/.test(type)) return 'string';
-	if (/json|jsonb/.test(type)) return 'any';
-	if (/interval/.test(type)) return 'string';
-	if (/timestamp|date/.test(type)) return 'string';
-	if (/varchar|char|text/.test(type)) return 'string';
-	if (/boolean/.test(type)) return 'boolean';
-	if (/bytea/.test(type)) return 'Buffer';
-	if (/int|float|double|decimal|numeric|real/.test(type)) return 'number';
+	if (/serial|bigserial/.test(type)) return 'number'; // SERIAL 和 BIGSERIAL 类型映射为 number
+	if (/uuid/.test(type)) return 'string'; // UUID 类型映射为 string
+	if (/json|jsonb/.test(type)) return 'any'; // JSON 和 JSONB 类型映射为 any
+	if (/interval/.test(type)) return 'string'; // INTERVAL 类型映射为 string
+	if (/timestamp|date/.test(type)) return 'string'; // timestamp 和 date 类型映射为 string
+	if (/varchar|char|text/.test(type)) return 'string'; // 字符串类型映射为 string
+	if (/boolean/.test(type)) return 'boolean'; // boolean 类型映射为 boolean
+	if (/bytea/.test(type)) return 'Buffer'; // bytea 类型映射为 Buffer
+	if (/int|float|double|decimal|numeric|real/.test(type)) return 'number'; // 数字类型映射为 number
 	return 'any';
 }
 
@@ -53,6 +53,7 @@ export function generate(
 
 	return lines.join('\n');
 }
+
 interface ParsedColumn {
 	name: string;
 	rawType: string;
@@ -88,7 +89,7 @@ function parseSQL(sql: string): ParsedTable[] {
 			.map((line) => line.trim())
 			.filter(
 				(line) =>
-					!!line && !/^(primary|unique|key|constraint|foreign)/i.test(line),
+					!!line && !/^(primary|unique|key|constraint|foreign|index)/i.test(line), // 过滤索引、约束定义
 			);
 
 		const columns: ParsedColumn[] = [];

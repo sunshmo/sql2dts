@@ -1,151 +1,124 @@
-// SQLite 特有类型映射
 import { generateInterfaceName } from './util/generate-interface-name';
 
-function mapType(rawType: string, enumValues?: string[]): string {
-	if (enumValues?.length) {
-		return enumValues.map((v) => `'${v}'`).join(' | ');
-	}
-
-	const type = rawType.toLowerCase();
-	if (/integer/.test(type)) return 'number';
-	if (/real/.test(type)) return 'number';
-	if (/text/.test(type)) return 'string';
-	if (/blob/.test(type)) return 'Buffer';
-	if (/null/.test(type)) return 'any';
-	return 'any';
+export function generate(sql: string): string {
+	const tables = parseSQLForSQLite(sql);
+	return tables.map(generateInterface).join('\n\n');
 }
 
-// We can reuse the same mapType function and parser
-export function generate(
-	sql: string,
-	options?: { namespace?: string },
-): string {
-	const tables = parseSQL(sql);
-	const lines: string[] = [];
+function parseSQLForSQLite(sql: string): Table[] {
+	const tableDefs = [
+		...sql.matchAll(
+			/create\s+table\s+([\w.]+)\s*\(([\s\S]+?)\)\s*(?:;|--|\n)/gim,
+		),
+	];
 
-	if (options?.namespace) {
-		lines.push(`declare namespace ${options.namespace} {`);
-	}
+	const indexDefs = [
+		...sql.matchAll(
+			/create\s+index\s+([\w.]+)\s+on\s+([\w.]+)\s*\(([\w\s,]+)\)/gim,
+		),
+	];
 
-	for (const table of tables) {
-		const interfaceLine = `${options?.namespace ? '' : 'export '}interface ${generateInterfaceName(table.name)} {`;
-		lines.push(interfaceLine);
+	const tables: Table[] = [];
 
-		for (const column of table.columns) {
-			const tsType = mapType(column.rawType, column.enumValues);
-			const optional =
-				column.isNullable || column.defaultValue !== undefined ? '?' : '';
-			const comment = column.comment ? ` // ${column.comment}` : '';
-			lines.push(`  ${column.name}${optional}: ${tsType};${comment}`);
+	// 解析表结构
+	for (const match of tableDefs) {
+		const [, fullTableName, body] = match;
+		const name = fullTableName.replace(/["]/g, '');
+		const columns: Column[] = [];
+
+		const columnMatches = [
+			...body.matchAll(
+				/(\w+)\s+([^\s,]+)(?:\s+not\s+null)?(?:\s+options\s*\(\s*comment\s*=\s*'([^']*)'\s*\))?,?/gim,
+			),
+		];
+		for (const [, colName, rawType, comment] of columnMatches) {
+			columns.push({
+				name: colName,
+				type: sqliteTypeToTsType(rawType),
+				comment: comment?.trim(),
+			});
 		}
 
-		lines.push('}');
-		lines.push('');
+		tables.push({
+			name,
+			columns,
+			indexes: parseIndexesForTable(name, indexDefs),  // 解析索引
+		});
 	}
 
-	if (options?.namespace) {
-		lines.push('}');
+	return tables;
+}
+
+// 解析索引
+function parseIndexesForTable(tableName: string, indexDefs: RegExpMatchArray[]): Index[] {
+	return indexDefs
+		.filter(([, , indexTableName]) => indexTableName === tableName) // 筛选属于当前表的索引
+		.map(([, indexName, , columns]) => {
+			const indexColumns = columns.split(',').map(col => col.trim());
+			return {
+				name: indexName,
+				columns: indexColumns,
+			};
+		});
+}
+
+function generateInterface(table: Table): string {
+	const interfaceName = generateInterfaceName(table.name);
+	const lines: string[] = [];
+
+	lines.push(`export interface ${interfaceName} {`);
+	for (const col of table.columns) {
+		const comment = col.comment ? ` // ${col.comment}` : '';
+		lines.push(`  ${col.name}: ${col.type};${comment}`);
+	}
+	lines.push(`}`);
+
+	// 处理索引
+	if (table.indexes.length > 0) {
+		lines.push('');
+		lines.push('export const indexes = {');
+		table.indexes.forEach(index => {
+			lines.push(`  ${index.name}: [${index.columns.map(col => `'${col}'`).join(', ')}],`);
+		});
+		lines.push('};');
 	}
 
 	return lines.join('\n');
 }
-interface ParsedColumn {
-	name: string;
-	rawType: string;
-	isNullable: boolean;
-	comment?: string;
-	enumValues?: string[];
-	length?: number;
-	precision?: number;
-	scale?: number;
-	defaultValue?: string;
-	isPrimary?: boolean;
-	isUnique?: boolean;
-	isAutoIncrement?: boolean;
-}
 
-interface ParsedTable {
-	name: string;
-	columns: ParsedColumn[];
-}
+function sqliteTypeToTsType(type: string): string {
+	let t = type.toLowerCase().trim();
 
-function parseSQL(sql: string): ParsedTable[] {
-	const tableBlocks = [
-		...sql.matchAll(
-			/create\s+table\s+[`"]?(\w+)[`"]?\s*\(([\s\S]+?)\)\s*(engine|comment|with|stored|partition|;)/gim,
-		),
-	];
-
-	const tables: ParsedTable[] = [];
-
-	for (const [, tableName, rawColumns] of tableBlocks) {
-		const lines = rawColumns
-			.split(/,(?![^()]*\))/) // split by commas not inside parentheses
-			.map((line) => line.trim())
-			.filter(
-				(line) =>
-					!!line && !/^(primary|unique|key|constraint|foreign)/i.test(line),
-			);
-
-		const columns: ParsedColumn[] = [];
-
-		for (const line of lines) {
-			const columnMatch = line.match(
-				/^\s*[`"]?(\w+)[`"]?\s+([a-zA-Z0-9_]+(?:\s*\(([^)]*)\))?)([\s\S]*)$/,
-			);
-			if (!columnMatch) continue;
-
-			const [, name, typeWithParens, parenContent, rest] = columnMatch;
-			const rawType = typeWithParens.trim();
-
-			const isNullable = !/not\s+null/i.test(rest);
-			const isPrimary = /primary\s+key/i.test(rest);
-			const isUnique = /unique/i.test(rest);
-			const isAutoIncrement = /auto_increment/i.test(rest);
-			const commentMatch = rest.match(/comment\s+['"]([^'"]+)['"]/i);
-			const comment = commentMatch ? commentMatch[1] : undefined;
-
-			let enumValues: string[] | undefined;
-			if (/^enum/i.test(rawType) && parenContent) {
-				enumValues = parenContent
-					.split(/,(?=(?:[^']*'[^']*')*[^']*$)/)
-					.map((v) => v.trim().replace(/^'(.*)'$/, '$1'));
-			}
-
-			const lengthMatch = rawType.match(/\w+\((\d+)\)/);
-			const length = lengthMatch ? parseInt(lengthMatch[1], 10) : undefined;
-
-			const precisionScaleMatch = rawType.match(/\w+\((\d+),(\d+)\)/);
-			const precision = precisionScaleMatch
-				? parseInt(precisionScaleMatch[1], 10)
-				: undefined;
-			const scale = precisionScaleMatch
-				? parseInt(precisionScaleMatch[2], 10)
-				: undefined;
-
-			const defaultMatch = rest.match(/default\s+(['"]?[^"]+['"]?)/i);
-			const defaultValue = defaultMatch
-				? defaultMatch[1].replace(/^['"]|['"]$/g, '')
-				: undefined;
-
-			columns.push({
-				name,
-				rawType,
-				isNullable,
-				comment,
-				enumValues,
-				length,
-				precision,
-				scale,
-				defaultValue,
-				isPrimary,
-				isUnique,
-				isAutoIncrement,
-			});
-		}
-
-		tables.push({ name: tableName, columns });
+	// 处理数组类型：ARRAY<T>
+	const arrayMatch = t.match(/^array<(.+)>$/i);
+	if (arrayMatch) {
+		return `${sqliteTypeToTsType(arrayMatch[1])}[]`;
 	}
 
-	return tables;
+	// SQLite 常见类型
+	if (t === 'integer') return 'number';
+	if (t === 'text' || t === 'varchar' || t === 'char') return 'string';
+	if (t === 'blob') return 'Buffer';
+	if (t === 'real' || t === 'float' || t === 'double') return 'number';
+	if (t === 'boolean') return 'boolean';
+
+	// 默认返回 any
+	return 'any';
+}
+
+interface Column {
+	name: string;
+	type: string;
+	comment?: string;
+}
+
+interface Table {
+	name: string;
+	columns: Column[];
+	indexes: Index[];
+}
+
+interface Index {
+	name: string;
+	columns: string[];
 }
