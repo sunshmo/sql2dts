@@ -54,7 +54,13 @@ function generateInterface(table: Table): string {
 	const interfaceName = generateInterfaceName(table.name);
 	const lines: string[] = [];
 
-	if (table.comment || table.engine || table.orderBy || table.primaryKey || table.settings) {
+	if (
+		table.comment ||
+		table.engine ||
+		table.orderBy ||
+		table.primaryKey ||
+		table.settings
+	) {
 		lines.push(`/**`);
 		if (table.comment) lines.push(` * ${table.comment}`);
 		if (table.engine) lines.push(` * ENGINE = ${table.engine}`);

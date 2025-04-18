@@ -55,9 +55,11 @@ function mapType(
 	}
 
 	// 基本类型映射
-	if (/tinyint|smallint|mediumint|int|bigint|integer/.test(type)) return 'number';
+	if (/tinyint|smallint|mediumint|int|bigint|integer/.test(type))
+		return 'number';
 	if (/decimal|numeric|decfloat|real|double/.test(type)) return 'number';
-	if (/char|nchar|nvarchar|varchar|graphic|vargraphic|clob|dbclob/.test(type)) return 'string';
+	if (/char|nchar|nvarchar|varchar|graphic|vargraphic|clob|dbclob/.test(type))
+		return 'string';
 	if (/binary|varbinary|blob/.test(type)) return 'Buffer';
 	if (/date|time|timestamp/.test(type)) return 'string';
 	if (/boolean|bool/.test(type)) return 'boolean';
@@ -65,7 +67,8 @@ function mapType(
 	if (/xml/.test(type)) return 'string';
 	if (/json/.test(type)) return 'Record<string, any>';
 	if (/cursor/.test(type)) return 'any';
-	if (/st_point|st_linestring|st_polygon|st_geometry/.test(type)) return 'string'; // 空间类型
+	if (/st_point|st_linestring|st_polygon|st_geometry/.test(type))
+		return 'string'; // 空间类型
 
 	return 'any';
 }

@@ -42,7 +42,7 @@ function parseSQLForSQLite(sql: string): Table[] {
 		tables.push({
 			name,
 			columns,
-			indexes: parseIndexesForTable(name, indexDefs),  // 解析索引
+			indexes: parseIndexesForTable(name, indexDefs), // 解析索引
 		});
 	}
 
@@ -50,11 +50,14 @@ function parseSQLForSQLite(sql: string): Table[] {
 }
 
 // 解析索引
-function parseIndexesForTable(tableName: string, indexDefs: RegExpMatchArray[]): Index[] {
+function parseIndexesForTable(
+	tableName: string,
+	indexDefs: RegExpMatchArray[],
+): Index[] {
 	return indexDefs
 		.filter(([, , indexTableName]) => indexTableName === tableName) // 筛选属于当前表的索引
 		.map(([, indexName, , columns]) => {
-			const indexColumns = columns.split(',').map(col => col.trim());
+			const indexColumns = columns.split(',').map((col) => col.trim());
 			return {
 				name: indexName,
 				columns: indexColumns,
@@ -77,8 +80,10 @@ function generateInterface(table: Table): string {
 	if (table.indexes.length > 0) {
 		lines.push('');
 		lines.push('export const indexes = {');
-		table.indexes.forEach(index => {
-			lines.push(`  ${index.name}: [${index.columns.map(col => `'${col}'`).join(', ')}],`);
+		table.indexes.forEach((index) => {
+			lines.push(
+				`  ${index.name}: [${index.columns.map((col) => `'${col}'`).join(', ')}],`,
+			);
 		});
 		lines.push('};');
 	}

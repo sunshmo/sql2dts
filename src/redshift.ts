@@ -60,7 +60,7 @@ function mapType(
 export function generate(
 	sql: string,
 	options?: { namespace?: string },
-	udtTypeMapping: Record<string, string> = {}
+	udtTypeMapping: Record<string, string> = {},
 ): string {
 	const tables = parseSQL(sql);
 	const lines: string[] = [];

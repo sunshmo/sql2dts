@@ -89,7 +89,8 @@ function parseSQL(sql: string): ParsedTable[] {
 			.map((line) => line.trim())
 			.filter(
 				(line) =>
-					!!line && !/^(primary|unique|key|constraint|foreign|index)/i.test(line), // 过滤索引、约束定义
+					!!line &&
+					!/^(primary|unique|key|constraint|foreign|index)/i.test(line), // 过滤索引、约束定义
 			);
 
 		const columns: ParsedColumn[] = [];

@@ -7,7 +7,9 @@ export function generate(sql: string): string {
 
 function parseSQLForCockroachDB(sql: string): Table[] {
 	const tableDefs = [
-		...sql.matchAll(/create\s+table\s+(`?[\w.]+`?)\s*\(([\s\S]+?)\)\s*(index\s+.*|primary\s+key\s+.*)?/gim),
+		...sql.matchAll(
+			/create\s+table\s+(`?[\w.]+`?)\s*\(([\s\S]+?)\)\s*(index\s+.*|primary\s+key\s+.*)?/gim,
+		),
 	];
 
 	return tableDefs.map((match) => {
@@ -43,7 +45,9 @@ function parseIndexes(indexDef: string | undefined): Index[] {
 	if (!indexDef) return [];
 
 	const indexMatches = [
-		...indexDef.matchAll(/create\s+index\s+(\w+)\s+on\s+`?[\w.]+`?\s*\(([^)]+)\)/gim),
+		...indexDef.matchAll(
+			/create\s+index\s+(\w+)\s+on\s+`?[\w.]+`?\s*\(([^)]+)\)/gim,
+		),
 	];
 
 	return indexMatches.map((match) => {
