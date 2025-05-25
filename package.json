@@ -13,9 +13,9 @@
     "sql2dts": "./dist-bin/index.js"
   },
   "scripts": {
-    "generate-export": "ts-node generate-export.ts",
+    "generate-export": "tsx generate-export.ts",
     "tsup": "tsup",
-    "dev-ts": "ts-node bin/index.ts test/mysql.sql -d mysql",
+    "dev-ts": "tsx bin/index.ts test/mysql.sql -d mysql",
     "dev-js": "node dist-bin/index.js test/mysql.sql",
     "build": "run-s format generate-export tsup",
     "format-view": "biome check src",
@@ -48,7 +48,7 @@
     "@biomejs/biome": "^1.9.4",
     "@types/node": "^22.14.1",
     "npm-run-all": "^4.1.5",
-    "ts-node": "^10.9.2",
-    "tsup": "^8.4.0"
+    "tsup": "^8.4.0",
+    "tsx": "^4.19.4"
   }
 }
